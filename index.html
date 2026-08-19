@@ -250,7 +250,8 @@
 
   input[type="text"], input[type="email"], textarea {
     width: 100%;
-    font-family: var(--font-body);
+    font-family: var(--font-display);
+    font-weight: 700;
     font-size: 0.98rem;
     color: var(--ink);
     background: var(--paper);
@@ -425,6 +426,13 @@
     color: var(--ink-soft);
     font-size: 0.82rem;
     padding: 0 1.5rem 2.5rem;
+  }
+
+  footer p { margin: 0 0 0.4rem; }
+  footer p:last-child { margin-bottom: 0; }
+
+  .type-credit {
+    font-size: 0.74rem;
   }
 </style>
 
@@ -621,7 +629,10 @@
   </div>
 </div>
 
-<footer>Fill a few fields to start &mdash; the page on the right updates as you type. Nothing leaves your browser; your draft autosaves locally.</footer>
+<footer>
+  <p>Fill a few fields to start &mdash; the page on the right updates as you type. Nothing leaves your browser; your draft autosaves locally.</p>
+  <p class="type-credit">Set in Poppins, designed by Jonny Pinhorn for Indian Type Foundry, and Georgia, designed by Matthew Carter.</p>
+</footer>
 
 <script>
 (function () {
