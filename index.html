@@ -426,6 +426,28 @@
   .type-credit {
     font-size: 0.74rem;
   }
+
+  @media print {
+    * {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      color-adjust: exact;
+    }
+    body { background: #fff; }
+    header.top, #formCol, .email-wrap, footer { display: none !important; }
+    main {
+      display: block;
+      max-width: none;
+      padding: 0;
+    }
+    .preview-wrap { position: static; }
+    .page {
+      max-height: none;
+      overflow: visible;
+    }
+    .cover, .page { border-width: 2px; }
+    .story-act { break-inside: avoid; }
+  }
 </style>
 
 <header class="top">
@@ -437,6 +459,7 @@
     </div>
     <div class="toolbar">
       <button class="btn-quiet" id="clearBtn" type="button">Clear all</button>
+      <button class="btn-quiet" id="pdfBtn" type="button">Download PDF</button>
       <button class="btn-primary" id="copyBtn" type="button">Copy story</button>
     </div>
   </div>
@@ -780,6 +803,14 @@
     });
   });
 
+  document.getElementById('pdfBtn').addEventListener('click', function () {
+    var v = getValues();
+    var oldTitle = document.title;
+    document.title = v.title || 'Picture Book Story';
+    window.print();
+    setTimeout(function () { document.title = oldTitle; }, 500);
+  });
+
   var emailStatusEl = document.getElementById('emailStatus');
   var emailFallbackLink = document.getElementById('emailFallbackLink');
   var emailSubmitBtn = document.getElementById('emailSubmitBtn');
@@ -873,4 +904,5 @@
   render();
 })();
 </script>
+
 
