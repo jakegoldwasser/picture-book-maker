@@ -32,38 +32,6 @@
     --font-body: Georgia, "Yale", "Times New Roman", serif;
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --paper: #141310;
-      --ink: #F2EFE4;
-      --ink-soft: #B7B29C;
-      --red: #FF4B3E;
-      --yellow: #FFD53D;
-      --blue: #4C96E8;
-      --green: #3FBE77;
-      --on-red: #111111;
-      --on-yellow: #111111;
-      --on-blue: #111111;
-      --on-green: #111111;
-      --focus: #FF4B3E;
-    }
-  }
-
-  :root[data-theme="dark"] {
-    --paper: #141310;
-    --ink: #F2EFE4;
-    --ink-soft: #B7B29C;
-    --red: #FF4B3E;
-    --yellow: #FFD53D;
-    --blue: #4C96E8;
-    --green: #3FBE77;
-    --on-red: #111111;
-    --on-yellow: #111111;
-    --on-blue: #111111;
-    --on-green: #111111;
-    --focus: #FF4B3E;
-  }
-
   * { box-sizing: border-box; }
 
   body {
@@ -421,6 +389,30 @@
     flex: none;
   }
 
+  .btn-primary:disabled {
+    background: var(--ink-soft);
+    color: var(--paper);
+    cursor: default;
+  }
+
+  .email-status {
+    margin: 0.85rem 0 0;
+    font-weight: 600;
+  }
+
+  .email-status[data-state="success"] { color: var(--green); }
+  .email-status[data-state="error"] { color: var(--red); }
+
+  .email-fallback-link {
+    display: none;
+    margin: 0.4rem 0 0;
+    color: var(--ink);
+    text-decoration: underline;
+    font-size: 0.9rem;
+  }
+
+  .email-fallback-link[data-visible="true"] { display: inline-block; }
+
   footer {
     text-align: center;
     color: var(--ink-soft);
@@ -618,14 +610,16 @@
       <span class="act-tab" style="--act-color: var(--green); --act-on: var(--on-green);">&#9993;</span>
       <h3 class="act-title">Email yourself a copy</h3>
     </div>
-    <p>Enter an email address below. We'll open your mail app with the story ready to send &mdash; to that same address.</p>
+    <p>Enter an email address below. If you've connected Gmail to Claude, we'll send it straight there. Otherwise, we'll open your mail app with the story ready to send.</p>
     <form class="email-form" id="emailForm">
       <div class="field">
         <label class="label" for="emailAddr">Email address</label>
         <input type="email" id="emailAddr" required placeholder="you@example.com" />
       </div>
-      <button class="btn-primary" type="submit">Email me this story</button>
+      <button class="btn-primary" type="submit" id="emailSubmitBtn">Email me this story</button>
     </form>
+    <p class="email-status" id="emailStatus" aria-live="polite"></p>
+    <a href="#" class="email-fallback-link" id="emailFallbackLink">Open in your mail app instead</a>
   </div>
 </div>
 
@@ -786,7 +780,35 @@
     });
   });
 
-  document.getElementById('emailForm').addEventListener('submit', function (e) {
+  var emailStatusEl = document.getElementById('emailStatus');
+  var emailFallbackLink = document.getElementById('emailFallbackLink');
+  var emailSubmitBtn = document.getElementById('emailSubmitBtn');
+  var lastEmailAttempt = null;
+
+  function setEmailStatus(state, text) {
+    emailStatusEl.textContent = text || '';
+    if (state) { emailStatusEl.setAttribute('data-state', state); }
+    else { emailStatusEl.removeAttribute('data-state'); }
+  }
+
+  function mailtoUrl(email, subject, body) {
+    return 'mailto:' + encodeURIComponent(email) +
+      '?subject=' + encodeURIComponent(subject) +
+      '&body=' + encodeURIComponent(body);
+  }
+
+  function showFallbackLink(email, subject, body) {
+    lastEmailAttempt = { email: email, subject: subject, body: body };
+    emailFallbackLink.setAttribute('data-visible', 'true');
+  }
+
+  emailFallbackLink.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (!lastEmailAttempt) return;
+    window.location.href = mailtoUrl(lastEmailAttempt.email, lastEmailAttempt.subject, lastEmailAttempt.body);
+  });
+
+  document.getElementById('emailForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     var input = document.getElementById('emailAddr');
     if (!input.checkValidity()) {
@@ -795,13 +817,60 @@
     }
     var email = input.value.trim();
     var subject = getValues().title || 'My Picture Book Idea';
-    var url = 'mailto:' + encodeURIComponent(email) +
-      '?subject=' + encodeURIComponent(subject) +
-      '&body=' + encodeURIComponent(plainStory());
-    window.location.href = url;
+    var body = plainStory();
+
+    emailFallbackLink.removeAttribute('data-visible');
+    setEmailStatus(null, '');
+
+    var mcp = null;
+    try {
+      if (window.claude && typeof window.claude.use === 'function') {
+        mcp = await window.claude.use('mcp');
+      }
+    } catch (e) {
+      mcp = null;
+    }
+
+    if (!mcp) {
+      window.location.href = mailtoUrl(email, subject, body);
+      return;
+    }
+
+    emailSubmitBtn.disabled = true;
+    var originalLabel = emailSubmitBtn.textContent;
+    emailSubmitBtn.textContent = 'Sending…';
+
+    try {
+      await mcp.callTool('Gmail', 'send_message', { to: [email], subject: subject, body: body });
+      setEmailStatus('success', 'Sent! Check ' + email + '.');
+    } catch (err) {
+      var code = err && err.code;
+      if (code === 'not_granted' || code === 'capability_disabled' || code === 'capability_removed') {
+        window.location.href = mailtoUrl(email, subject, body);
+      } else if (code === 'needs_reauth' || code === 'server_not_connected') {
+        setEmailStatus('error', 'Gmail isn’t connected. Reconnect it in claude.ai Settings → Connectors, then try again.');
+        showFallbackLink(email, subject, body);
+      } else if (code === 'selection_required') {
+        setEmailStatus('error', 'Choose a Gmail account for this artifact, then try again.');
+        showFallbackLink(email, subject, body);
+      } else if (code === 'blocked_by_policy') {
+        setEmailStatus('error', 'Sending email from this artifact is blocked by your organization’s policy.');
+        showFallbackLink(email, subject, body);
+      } else if (code === 'approval_required') {
+        setEmailStatus('error', 'Sending needs an approval step that isn’t available here.');
+        showFallbackLink(email, subject, body);
+      } else {
+        setEmailStatus('error', 'Couldn’t send via Gmail right now.');
+        showFallbackLink(email, subject, body);
+      }
+    } finally {
+      emailSubmitBtn.disabled = false;
+      emailSubmitBtn.textContent = originalLabel;
+    }
   });
 
   load();
   render();
 })();
 </script>
+
