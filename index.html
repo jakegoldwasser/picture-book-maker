@@ -633,7 +633,7 @@
       <span class="act-tab" style="--act-color: var(--green); --act-on: var(--on-green);">&#9993;</span>
       <h3 class="act-title">Email yourself a copy</h3>
     </div>
-    <p>Enter an email address below. If you've connected Gmail to Claude, we'll send it straight there. Otherwise, we'll open your mail app with the story ready to send.</p>
+    <p>Enter an email address below and we'll send the story straight there. If that's not possible here, we'll open your mail app instead with the story ready to send.</p>
     <form class="email-form" id="emailForm">
       <div class="field">
         <label class="label" for="emailAddr">Email address</label>
@@ -651,8 +651,18 @@
   <p class="type-credit">Set in Poppins, designed by Jonny Pinhorn for Indian Type Foundry, and Georgia, designed by Matthew Carter.</p>
 </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
 (function () {
+  try {
+    if (window.emailjs && typeof window.emailjs.init === 'function') {
+      window.emailjs.init({ publicKey: 'Vb5AmJRuwdKkbSlH4' });
+    }
+  } catch (e) {}
+
+  var EMAILJS_SERVICE_ID = 'service_ur7r6mv';
+  var EMAILJS_TEMPLATE_ID = 'template_k5wzlc6';
+
   var STORAGE_KEY = 'pictureBookMaker.v1';
 
   var fields = [
@@ -862,42 +872,62 @@
       mcp = null;
     }
 
-    if (!mcp) {
-      window.location.href = mailtoUrl(email, subject, body);
-      return;
-    }
-
     emailSubmitBtn.disabled = true;
     var originalLabel = emailSubmitBtn.textContent;
     emailSubmitBtn.textContent = 'Sending…';
 
-    try {
-      await mcp.callTool('Gmail', 'send_message', { to: [email], subject: subject, body: body });
-      setEmailStatus('success', 'Sent! Check ' + email + '.');
-    } catch (err) {
-      var code = err && err.code;
-      if (code === 'not_granted' || code === 'capability_disabled' || code === 'capability_removed') {
-        window.location.href = mailtoUrl(email, subject, body);
-      } else if (code === 'needs_reauth' || code === 'server_not_connected') {
-        setEmailStatus('error', 'Gmail isn’t connected. Reconnect it in claude.ai Settings → Connectors, then try again.');
-        showFallbackLink(email, subject, body);
-      } else if (code === 'selection_required') {
-        setEmailStatus('error', 'Choose a Gmail account for this artifact, then try again.');
-        showFallbackLink(email, subject, body);
-      } else if (code === 'blocked_by_policy') {
-        setEmailStatus('error', 'Sending email from this artifact is blocked by your organization’s policy.');
-        showFallbackLink(email, subject, body);
-      } else if (code === 'approval_required') {
-        setEmailStatus('error', 'Sending needs an approval step that isn’t available here.');
-        showFallbackLink(email, subject, body);
-      } else {
-        setEmailStatus('error', 'Couldn’t send via Gmail right now.');
-        showFallbackLink(email, subject, body);
+    if (mcp) {
+      try {
+        await mcp.callTool('Gmail', 'send_message', { to: [email], subject: subject, body: body });
+        setEmailStatus('success', 'Sent! Check ' + email + '.');
+      } catch (err) {
+        var code = err && err.code;
+        if (code === 'not_granted' || code === 'capability_disabled' || code === 'capability_removed') {
+          window.location.href = mailtoUrl(email, subject, body);
+        } else if (code === 'needs_reauth' || code === 'server_not_connected') {
+          setEmailStatus('error', 'Gmail isn’t connected. Reconnect it in claude.ai Settings → Connectors, then try again.');
+          showFallbackLink(email, subject, body);
+        } else if (code === 'selection_required') {
+          setEmailStatus('error', 'Choose a Gmail account for this artifact, then try again.');
+          showFallbackLink(email, subject, body);
+        } else if (code === 'blocked_by_policy') {
+          setEmailStatus('error', 'Sending email from this artifact is blocked by your organization’s policy.');
+          showFallbackLink(email, subject, body);
+        } else if (code === 'approval_required') {
+          setEmailStatus('error', 'Sending needs an approval step that isn’t available here.');
+          showFallbackLink(email, subject, body);
+        } else {
+          setEmailStatus('error', 'Couldn’t send via Gmail right now.');
+          showFallbackLink(email, subject, body);
+        }
+      } finally {
+        emailSubmitBtn.disabled = false;
+        emailSubmitBtn.textContent = originalLabel;
       }
-    } finally {
-      emailSubmitBtn.disabled = false;
-      emailSubmitBtn.textContent = originalLabel;
+      return;
     }
+
+    if (window.emailjs && typeof window.emailjs.send === 'function') {
+      try {
+        await window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+          to_email: email,
+          subject: subject,
+          message: body
+        });
+        setEmailStatus('success', 'Sent! Check ' + email + '.');
+      } catch (err) {
+        setEmailStatus('error', 'Couldn’t send automatically.');
+        showFallbackLink(email, subject, body);
+      } finally {
+        emailSubmitBtn.disabled = false;
+        emailSubmitBtn.textContent = originalLabel;
+      }
+      return;
+    }
+
+    emailSubmitBtn.disabled = false;
+    emailSubmitBtn.textContent = originalLabel;
+    window.location.href = mailtoUrl(email, subject, body);
   });
 
   load();
