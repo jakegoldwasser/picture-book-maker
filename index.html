@@ -248,8 +248,14 @@
     grid-template-columns: 1fr 1fr;
     gap: 0.9rem;
   }
+
+  .row2 .field label {
+    min-height: 3.1em;
+  }
+
   @media (max-width: 560px) {
     .row2 { grid-template-columns: 1fr; }
+    .row2 .field label { min-height: 0; }
   }
 
   /* ---------- Preview ---------- */
